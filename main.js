@@ -13,12 +13,12 @@ llllll
 ll  ll
 cc  cc
 `,`
- LLL  
- LlLL
-LLLLLL
-LLLLLL
- LLLL
-  LLL
+ RRR 
+ RLRR
+RRRRRR
+RRRRRR
+ RRRR
+  RRR
 `,`
   ll  
  llll
@@ -35,13 +35,15 @@ const G = {
 	LANES: 4,
 	LANE_WIDTH: 100 / 4,
 	SHIP_SPEED: 5,
-	ITEM_SPEED: 10,
-	ITEM_SPAWN_RATE: 10,
+	METEOR_SPEED: 1,
+	METEOR_ROTATION_SPEED: 0.1,
+	METEOR_SPAWN_RATE: 60,
 	PLAYER_INPUT_FRAMES: 10
 };
 
 options = {
 	viewSize: {x: G.WIDTH, y: G.HEIGHT},
+	seed: 10,
 	theme: "pixel"
 };
 
@@ -80,19 +82,35 @@ let currentHeight;
 
 /**
 * @typedef {{
-* pos: Vector
+* pos: Vector,
+* rotation: number
 * }} Item
 */
 
 /**
-* @type { Item }
+* @type { Item [] }
 */
-let meteor;
+let meteors;
 
 /**
-* @type { Item }
+* @type { number }
 */
-let boost;
+let meteorSpawnRate;
+
+/**
+* @type { Array }
+*/
+let lane;
+
+/**
+* @type { number }
+*/
+let laneIndex;
+
+/**
+* @type { number }
+*/
+let meteorCount;
 
 
 function initialize()
@@ -117,6 +135,12 @@ function initialize()
 	}
 
 	currentHeight = G.HEIGHT / 2;
+
+	meteors = [];
+	meteorSpawnRate = 0;
+	meteorCount = 0;
+	lane = [1,2,3,4];
+	laneIndex = 0;
 }
 
 function characterController()
@@ -124,7 +148,10 @@ function characterController()
 	player.pos.clamp(0, G.WIDTH, 0, G.HEIGHT);
 	player.pos.y += 0.5;
 	if (player.pos.y <= G.HEIGHT/4) player.pos.y = G.HEIGHT/4
-	if (player.pos.y >= G.HEIGHT) end();
+	if (player.pos.y >= G.HEIGHT) {
+		play("hit");
+		end();
+	}
 
 	if(input.isJustPressed) {
 		player.frameTimerEnabled = true;
@@ -137,11 +164,13 @@ function characterController()
 			color("cyan");
 			line(player.pos.x, player.pos.y, player.pos.x - G.LANE_WIDTH, player.pos.y, 5);
 			player.pos.x -= G.LANE_WIDTH;
+			play("laser");
 		} else
 		{
 			color("cyan");
 			line(player.pos.x, player.pos.y, player.pos.x + G.LANE_WIDTH, player.pos.y, 5);
 			player.pos.x += G.LANE_WIDTH;
+			play("laser");
 		}
 		player.move = false;
 	}
@@ -203,7 +232,7 @@ function boostFunction()
 		PI/2,
 		PI/8
 	)
-
+	//play("powerUp");
 	if(input.isJustReleased)
 	{
 		player.isBoosting = false;
@@ -221,6 +250,44 @@ function starManager()
 	});
 }
 
+function meteorManager() 
+{
+	meteorSpawnRate--;
+	if (meteorSpawnRate <= 0) {
+		meteorCount = rndi(1, 4);
+		laneIndex = rndi(0, 4);
+		while (meteorCount > 0) {
+			meteors.push({
+				pos: vec(lane[laneIndex] * G.LANE_WIDTH - 12.5, 0),
+				rotation: rnd()
+			});
+			lane.splice(laneIndex, 1);
+			meteorCount--;
+		}
+		lane = [1,2,3,4];
+		meteorSpawnRate = G.METEOR_SPAWN_RATE;
+	}
+	
+	meteors.forEach((m) => {
+		m.pos.y += G.METEOR_SPEED;
+		m.rotation += G.METEOR_ROTATION_SPEED;
+		
+		color("black");
+		char("b", m.pos, {rotation: m.rotation});
+		if(m.pos.y == G.HEIGHT) addScore(10, m.pos);
+	});
+
+	remove(meteors, (m) => {
+		color("black");
+		const collided = char("a", player.pos).isColliding.char.b;
+		if (collided) {
+			play("explosion");
+			end();
+		}
+		return (m.pos.y > G.HEIGHT);
+	});
+}
+
 function update() {
 	if (!ticks) {
 		initialize();
@@ -231,5 +298,7 @@ function update() {
 	inputTimer();
 
 	starManager();
+
+	meteorManager();
 
 }
